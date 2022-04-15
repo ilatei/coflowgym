@@ -84,16 +84,17 @@ public class Constants {
    * Number of milliseconds in a second of {@link Simulator}.
    * An epoch of {@link Simulator#simulate(int)}.
    */
-  public static final int SIMULATION_SECOND_MILLIS = 1024;
+  public static final int SIMULATION_SECOND_MILLIS = 1000;
 
   /**
    * Time step of {@link Simulator#simulate(int)}.
    */
-  public static final int SIMULATION_QUANTA = SIMULATION_SECOND_MILLIS
-      / (int) (RACK_BYTES_PER_SEC / 1048576);
+  public static final int SIMULATION_QUANTA = 10;
 
   /**
    * {@link Simulator#simulate(int)} completes after this time.
    */
   public static final int SIMULATION_ENDTIME_MILLIS = 86400 * SIMULATION_SECOND_MILLIS;
+
+  public static final int BUFFER_PER_FLOW = 100; //100 packets
 }

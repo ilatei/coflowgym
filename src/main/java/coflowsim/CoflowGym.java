@@ -2,13 +2,11 @@ package coflowsim;
 
 import java.util.*;
 
-import coflowsim.simulators.CoflowSimulator;
-import coflowsim.simulators.CoflowSimulatorDark;
+import com.alibaba.fastjson.JSONObject;
+
 import coflowsim.simulators.FlowSimulator;
 import coflowsim.simulators.Simulator;
-import coflowsim.traceproducers.CoflowBenchmarkTraceProducer;
-import coflowsim.traceproducers.CustomTraceProducer;
-import coflowsim.traceproducers.JobClassDescription;
+import coflowsim.traceproducers.BenchmarkTraceProducer;
 import coflowsim.traceproducers.TraceProducer;
 import coflowsim.utils.Constants;
 import coflowsim.utils.Constants.SHARING_ALGO;
@@ -31,21 +29,20 @@ public class CoflowGym {
      * @return
      *      return the observation
      */
-    public String toOneStep(double[] thresholds) {
+    public JSONObject toOneStep(double[] thresholds) {
         // System.out.println("thresholds: "+Arrays.toString(thresholds));
-        String res = "";
-        int TIMESATMP = 10 * Constants.SIMULATION_SECOND_MILLIS; // default is 10
+        JSONObject res = new JSONObject();
+        int TIMESATMP = Constants.SIMULATION_SECOND_MILLIS;
         boolean done;
         String obs, completed;
         this.takeAction(thresholds);
         completed = this.simulator.step(TIMESATMP);
-        done = this.simulator.prepareActiveJobs(TIMESATMP);
         obs = this.simulator.getObservation(TIMESATMP);
-        res += ("{\"observation\":\""+obs+"\",");
-        res += ("\"completed\":\""+completed+"\",");
-        res += ("\"MLFQ\":\""+this.simulator.getMLFQInfo()+"\",");
-        res += ("\"done\":"+done+"}");
-
+        done = this.simulator.prepareActiveJobs(TIMESATMP);
+        res.put("observation", obs);
+        res.put("completed", completed);
+        res.put("MLFQ",this.simulator.getMLFQInfo());
+        res.put("done", done);
         return res;
     }
 
@@ -113,71 +110,20 @@ public class CoflowGym {
             System.exit(1);
           }
         }
-    
+        
+        String pathToCoflowBenchmarkTraceFile = args[curArg];
+
         boolean isOffline = false;
-        int simulationTimestep = 10 * Constants.SIMULATION_SECOND_MILLIS;
-        if (isOffline) {
-          simulationTimestep = Constants.SIMULATION_ENDTIME_MILLIS;
-        }
+        // int simulationTimestep = Constants.SIMULATION_SECOND_MILLIS;
+        // if (isOffline) {
+        //   simulationTimestep = Constants.SIMULATION_ENDTIME_MILLIS;
+        // }
     
         boolean considerDeadline = false;
         double deadlineMultRandomFactor = 1;
-        if (considerDeadline && args.length > curArg) {
-          deadlineMultRandomFactor = Double.parseDouble(args[curArg++]);
-        }
     
         // Create TraceProducer
-        TraceProducer traceProducer = null;
-    
-        int numRacks = 100;
-        int numJobs = 10;
-        int randomSeed = 13;
-        JobClassDescription[] jobClassDescs = new JobClassDescription[] {
-            new JobClassDescription(1, 5, 1, 10),
-            new JobClassDescription(1, 5, 10, 1000),
-            new JobClassDescription(5, numRacks, 1, 10),
-            new JobClassDescription(5, numRacks, 10, 1000) };
-        double[] fracsOfClasses = new double[] {
-            41,
-            29,
-            9,
-            21 };
-    
-        traceProducer = new CustomTraceProducer(numRacks, numJobs, jobClassDescs, fracsOfClasses,
-            randomSeed);
-    
-        if (args.length > curArg) {
-          String UPPER_ARG = args[curArg++].toUpperCase();
-    
-          if (UPPER_ARG.equals("CUSTOM")) {
-            int numClasses = Integer.parseInt(args[curArg++]);
-    
-            jobClassDescs = new JobClassDescription[numClasses];
-            for (int i = 0; i < numClasses; i++) {
-              int minW = Integer.parseInt(args[curArg++]);
-              int maxW = Integer.parseInt(args[curArg++]);
-              int minL = Integer.parseInt(args[curArg++]);
-              int maxL = Integer.parseInt(args[curArg++]);
-    
-              jobClassDescs[i] = new JobClassDescription(minW, maxW, minL, maxL);
-            }
-    
-            fracsOfClasses = new double[numClasses];
-            for (int i = 0; i < numClasses; i++) {
-              fracsOfClasses[i] = Integer.parseInt(args[curArg++]);
-            }
-    
-            numRacks = Integer.parseInt(args[curArg++]);
-            numJobs = Integer.parseInt(args[curArg++]);
-            randomSeed = Integer.parseInt(args[curArg++]);
-    
-            traceProducer = new CustomTraceProducer(numRacks, numJobs, jobClassDescs, fracsOfClasses,
-                randomSeed);
-          } else if (UPPER_ARG.equals("COFLOW-BENCHMARK")) {
-            String pathToCoflowBenchmarkTraceFile = args[curArg++];
-            traceProducer = new CoflowBenchmarkTraceProducer(pathToCoflowBenchmarkTraceFile);
-          }
-        }
+        TraceProducer traceProducer  = new BenchmarkTraceProducer(pathToCoflowBenchmarkTraceFile); 
         traceProducer.prepareTrace();
     
         // sharingAlgo = SHARING_ALGO.DARK;
@@ -185,18 +131,14 @@ public class CoflowGym {
         if (sharingAlgo == SHARING_ALGO.FAIR || sharingAlgo == SHARING_ALGO.PFP) {
           nlpl = new FlowSimulator(sharingAlgo, traceProducer, isOffline, considerDeadline,
               deadlineMultRandomFactor);
-        } else if (sharingAlgo == SHARING_ALGO.DARK) {
-          nlpl = new CoflowSimulatorDark(sharingAlgo, traceProducer);
-        } else {
-          nlpl = new CoflowSimulator(sharingAlgo, traceProducer, isOffline, considerDeadline,
-              deadlineMultRandomFactor);
         }
         this.simulator = nlpl;
         // System.out.println("Simulator Class: "+nlpl.getClass().getName());
     }
 
     public static void main(String[] args) {
-        CoflowGym gym = new CoflowGym(args);
+        String[] args1 = {"FAIR", "C:\\Users\\ilatei\\Desktop\\coflowgym\\scripts\\test.txt"};
+        CoflowGym gym = new CoflowGym(args1);
         double initVal = 10485760.0;
         double[] thresholds = new double[9];
         thresholds[0] = initVal;
@@ -207,10 +149,10 @@ public class CoflowGym {
         for (int k = 0; k < 2; ++k) {
             gym.reset();
             for (int i = 0;i < 400; ++i) {
-                String res = gym.toOneStep(thresholds);
-                // System.out.println("Step: "+res);
+                JSONObject res = gym.toOneStep(thresholds);
+                System.out.println("Step: "+res);
                 gym.takeAction(thresholds);
-                // if (res) break;
+                if (res.get("done").equals(true)) break;
             }
             System.out.println("\nResult: ");
             gym.printStats();

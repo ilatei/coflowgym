@@ -25,16 +25,9 @@ public abstract class TraceProducer {
   public abstract void prepareTrace();
 
   /**
-   * Return the number of racks in the trace.
+   * Return the number of out line in the trace.
    * 
-   * @return the number of racks.
+   * @return the number of out link.
    */
-  public abstract int getNumRacks();
-
-  /**
-   * Return the number of machines in each rack of the trace.
-   * 
-   * @return the number of machines in each rack.
-   */
-  public abstract int getMachinesPerRack();
+  public abstract int getNumOutLink();
 }

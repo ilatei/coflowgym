@@ -4,6 +4,12 @@ import numpy as np
 import json, math, pprint
 import random
 
+curPath = os.path.abspath(os.path.dirname(__file__))
+rootPath = os.path.split(curPath)[0]
+sys.path.append(rootPath)
+print(sys.path)
+
+
 from algo.ddpg import DDPG, OUNoise
 from coflow import CoflowSimEnv
 from train import makeMLFQVal, action_with_kde
@@ -71,8 +77,16 @@ args8 = {
     "data": "scripts/valid_2.txt"
 } ## 测试生成的trace
 
+args9 = {
+    "data": "./scripts/valid1.txt",
+    "models": [250],
+    "model_dir": "models/2022-3-7-13-1-55", 
+    "episode": 1,
+    "is_shuffle": False,
+    "detailed": True
+} 
 
-choice = args8
+choice = args9
 
 def run(env, args):
     a_dim = env.action_space.shape[0]
@@ -282,6 +296,7 @@ def config_env():
     java.lang.System.out.println("Hello World!")
     testfile = "./scripts/test.txt"
     benchmark = "./scripts/FB2010-1Hr-150-0.txt"
+    valid_1 = "./scripts/valid_1.txt"
     # args = ["dark", "COFLOW-BENCHMARK", benchmark] # 2.4247392E7
     # args = ["dark", "COFLOW-BENCHMARK", "./scripts/light_tail.txt"] # 
     # args = ["dark", "COFLOW-BENCHMARK", testfile] # 326688.0
@@ -292,7 +307,10 @@ def config_env():
     # args = ["dark", "COFLOW-BENCHMARK", "./scripts/test_150_250.txt"] # 
     # args = ["dark", "COFLOW-BENCHMARK", "./scripts/test_200_225.txt"] # 3615440.0
     # args = ["dark", "COFLOW-BENCHMARK", "./scripts/custom.txt"] # 
-    args = ["dark", "COFLOW-BENCHMARK", choice["data"]]
+    # args = ["dark", "COFLOW-BENCHMARK", choice["data"]]
+    # args = ["dark", "COFLOW-BENCHMARK", benchmark] # 2.4247392E7
+    args = ["sscf", "COFLOW-BENCHMARK", valid_1]
+    # args = ["dark", "COFLOW-BENCHMARK", choice["data"]]
     CoflowGym = JClass("coflowsim.CoflowGym")
     gym = CoflowGym(args)
     return CoflowSimEnv(gym, False)

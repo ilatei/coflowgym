@@ -2,6 +2,11 @@ import sys, time, os, math
 from jpype import *
 import numpy as np
 
+curPath = os.path.abspath(os.path.dirname(__file__))
+rootPath = os.path.split(curPath)[0]
+sys.path.append(rootPath)
+print(sys.path)
+
 from coflowgym.algo.ddpg import DDPG, OUNoise
 from coflowgym.algo.ddpg_lstm import DDPG_LSTM
 from coflowgym.algo.ddpg_prob import DDPGProb
@@ -410,7 +415,7 @@ def config_env():
     testfile = "./scripts/100coflows.txt"
     benchmark = "./scripts/FB2010-1Hr-150-0.txt"
     valid_1 = "./scripts/valid_1.txt"
-    args = ["dark", "COFLOW-BENCHMARK", benchmark] # 2.4247392E7
+    # args = ["dark", "COFLOW-BENCHMARK", benchmark] # 2.4247392E7
     args = ["dark", "COFLOW-BENCHMARK", valid_1]
     # args = ["dark", "COFLOW-BENCHMARK", "./scripts/light_tail.txt"] # 3.73975776E8
     # args = ["dark", "COFLOW-BENCHMARK", testfile] # 326688.0

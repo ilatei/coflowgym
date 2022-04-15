@@ -11,6 +11,7 @@ from coflowgym.util import Logger, KDE
 # logger = Logger("log/mlfq.txt")
 # logger = Logger("log/result.txt")
 
+
 class CoflowSimEnv(Env):
     def __init__(self, gym, debug=True):
         self.coflowsim = gym
@@ -362,5 +363,9 @@ class CoflowKDEEnv(Env):
 
 if __name__ == "__main__":
     pass
+    # print(sys.path)
+    # curPath = os.path.abspath(os.path.dirname(__file__))
+    # rootPath = os.path.split(curPath)[0]
+    # sys.path.append(rootPath)
     print(sys.path)
     print("ok")

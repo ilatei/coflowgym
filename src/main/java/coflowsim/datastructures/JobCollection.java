@@ -6,6 +6,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Vector;
 
+import coflowsim.utils.Constants;
 /**
  * Keep track of jobs in a {@link coflowsim.traceproducers.TraceProducer}
  */
@@ -49,10 +50,10 @@ public class JobCollection implements Iterable<Job> {
   public void sortByStartTime() {
     Collections.sort(listOfJobs, new Comparator<Job>() {
       public int compare(Job o1, Job o2) {
-        if (o1.actualStartTime == o2.actualStartTime) {
+        if (o1.startTime == o2.startTime) {
           return 0;
         }
-        return o1.actualStartTime < o2.actualStartTime ? -1 : 1;
+        return o1.startTime < o2.startTime ? -1 : 1;
       }
     });
   }
@@ -73,7 +74,7 @@ public class JobCollection implements Iterable<Job> {
    *          {@link coflowsim.datastructures.Job} to remove.
    */
   public void removeJob(Job job) {
-    hashOfJobs.remove(job);
+    hashOfJobs.remove(job.jobName);
     listOfJobs.remove(job);
   }
 
@@ -95,5 +96,58 @@ public class JobCollection implements Iterable<Job> {
    */
   public Job elementAt(int index) {
     return listOfJobs.elementAt(index);
+  }
+
+  public void fillJobCollection(long timeNow, int timeSlot){
+    Vector<Job> job2remove = new Vector<Job>();
+    for(Job j : listOfJobs){
+      j.fillJobs(timeNow, timeSlot);
+      if(j.activeFlows.size() == 0){
+        job2remove.add(j);
+      }
+    }
+    for(Job j : job2remove){
+      listOfJobs.remove(j);
+    }
+  }
+  public boolean noJob(){
+    return listOfJobs.size() == 0;
+  }
+
+  public void manage_buffer(long curTime){
+    manage_buffer_per_flow(curTime);
+  }
+
+  private void manage_buffer_per_flow(long curTime){
+    for(Job j : listOfJobs){
+      for(Flow f : j.activeFlows){
+        int buffer_per_flow = Constants.BUFFER_PER_FLOW;
+        Vector<Packets> packets_dropped = new Vector<Packets>(); 
+        for(Packets p : f.packets){
+          if (p.arriveTime >= curTime){
+            break;
+          }
+          else{
+            if(p.numPackets <= buffer_per_flow){
+              buffer_per_flow -= p.numPackets;
+            }
+            else if(buffer_per_flow !=0){
+              Packets pp = new Packets(p.arriveTime, p.numPackets - buffer_per_flow);
+              f.reducedPackets.add(pp);
+              p.numPackets = buffer_per_flow;
+              buffer_per_flow = 0;
+            }
+            else{
+              p.dropped = true;
+              packets_dropped.add(p);
+              f.reducedPackets.add(p);
+            }
+          }
+        }
+        for(Packets p : packets_dropped){
+          f.packets.remove(p);
+        }
+      }
+    }
   }
 }

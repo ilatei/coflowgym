@@ -2,4 +2,4 @@
 
 mvn package
 
-python gym/coflow.py > log/log.txt
+python coflowgym/coflow.py > log/log.txt

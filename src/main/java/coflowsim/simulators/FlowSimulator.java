@@ -1,13 +1,13 @@
 package coflowsim.simulators;
 
 import java.util.Arrays;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Random;
 import java.util.Vector;
 
 import coflowsim.datastructures.Flow;
 import coflowsim.datastructures.Job;
-import coflowsim.datastructures.ReduceTask;
-import coflowsim.datastructures.Task;
-import coflowsim.datastructures.Task.TaskType;
 import coflowsim.traceproducers.TraceProducer;
 import coflowsim.utils.Constants;
 import coflowsim.utils.Constants.SHARING_ALGO;
@@ -30,67 +30,33 @@ public class FlowSimulator extends Simulator {
 
     super(sharingAlgo, traceProducer, offline, considerDeadline, deadlineMultRandomFactor);
     assert (sharingAlgo == SHARING_ALGO.FAIR || sharingAlgo == SHARING_ALGO.PFP);
-  }
 
-  private void addAscending(Vector<Flow> coll, Vector<Flow> flows) {
-    for (Flow f : flows) {
-      addAscending(coll, f);
-    }
-  }
-
-  private void addAscending(Vector<Flow> coll, Flow flow) {
-    int index = 0;
-    for (; index < coll.size(); index++) {
-      if (coll.elementAt(index).bytesRemaining > flow.getFlowSize()) {
-        break;
+    if(sharingAlgo == SHARING_ALGO.FAIR || sharingAlgo == SHARING_ALGO.PFP){
+      Random random = new Random();
+      for (Job j : jobs){
+        for(Flow f : j.waitingFlows){
+          f.randomLink = random.nextInt(NUM_OUT_LINK);
+        }
       }
     }
-    flow.consideredAlready = true;
-    coll.add(index, flow);
   }
 
   /** {@inheritDoc} */
   @Override
   protected void uponJobAdmission(Job j) {
-    for (Task t : j.tasks) {
-      if (t.taskType == TaskType.REDUCER) {
-        ReduceTask rt = (ReduceTask) t;
-
-        // Update start stats for the task and its parent job
-        rt.startTask(CURRENT_TIME);
-
-        // Add the parent job to the collection of active jobs
-        if (!activeJobs.containsKey(rt.parentJob.jobName)) {
-          activeJobs.put(rt.parentJob.jobName, rt.parentJob);
-        }
-
-        incNumActiveTasks();
+    j.currentTime = CURRENT_TIME;
+    Vector<Flow> flow2remove = new Vector<Flow>();
+    for (Flow f: j.waitingFlows) {
+      if(f.getArriveTime() <= CURRENT_TIME){
+        j.onFlowSchedule(f);
+        flow2remove.add(f);
+      }
+      else {
+        break;
       }
     }
-
-    for (Task r : j.tasks) {
-      if (r.taskType != TaskType.REDUCER) {
-        continue;
-      }
-      ReduceTask rt = (ReduceTask) r;
-
-      // Add at most Constants.MAX_CONCURRENT_FLOWS flows for FAIR sharing
-      int numFlowsToAdd = rt.flows.size();
-      if (sharingAlgo == SHARING_ALGO.FAIR) {
-        numFlowsToAdd = Constants.MAX_CONCURRENT_FLOWS;
-      }
-      numFlowsToAdd = rt.flows.size();
-
-      int added = 0;
-      for (Flow f : rt.flows) {
-        int toRack = rt.taskID;
-        addAscending(flowsInRacks[toRack], f);
-
-        added++;
-        if (added >= numFlowsToAdd) {
-          break;
-        }
-      }
+    for (Flow f : flow2remove){
+      j.waitingFlows.remove(f);
     }
   }
 
@@ -120,61 +86,39 @@ public class FlowSimulator extends Simulator {
    */
   private void fairShare(long curTime, long quantaSize) {
     // Calculate the number of outgoing flows
-    int[] numMapSideFlows = new int[NUM_RACKS];
-    Arrays.fill(numMapSideFlows, 0);
-    for (int i = 0; i < NUM_RACKS; i++) {
-      for (Flow f : flowsInRacks[i]) {
-        numMapSideFlows[f.mapper.taskID]++;
+    jobReduceOrder = 1;
+    int[] numLinkFlows = new int[NUM_OUT_LINK];
+    double[] bytesPerFlow = new double[NUM_OUT_LINK];
+    Arrays.fill(numLinkFlows, 0);
+    Arrays.fill(bytesPerFlow, 0);
+    for (Job j : jobs){
+      for(Flow f : j.activeFlows){
+        if(f.needReduce(curTime)){
+          numLinkFlows[f.randomLink] ++;
+        }
       }
     }
 
-    for (int i = 0; i < NUM_RACKS; i++) {
-      Vector<Flow> flowsToRemove = new Vector<Flow>();
-      Vector<Flow> flowsToAdd = new Vector<Flow>();
-      for (Flow f : flowsInRacks[i]) {
-        int numFlows = flowsInRacks[i].size();
-        if (numFlows == 0) {
-          continue;
-        }
+    for(int link=0; link < NUM_OUT_LINK; link++){
+      bytesPerFlow[link] = Constants.RACK_BYTES_PER_SEC / 1000 * quantaSize / numLinkFlows[link];
+    }
 
-        ReduceTask rt = f.reducer;
+    for (int i = 0; i < NUM_OUT_LINK; i++) {
+      // Vector<Flow> flowsToRemove = new Vector<Flow>();
+      // Vector<Flow> flowsToAdd = new Vector<Flow>();
 
-        double bytesPerTask = Math.min(
-            Constants.RACK_BYTES_PER_SEC * (1.0 * quantaSize / Constants.SIMULATION_SECOND_MILLIS)
-                / numFlows,
-            Constants.RACK_BYTES_PER_SEC * (1.0 * quantaSize / Constants.SIMULATION_SECOND_MILLIS)
-                / numMapSideFlows[f.mapper.taskID]);
-
-        bytesPerTask = Math.min(bytesPerTask, f.bytesRemaining);
-
-        f.bytesRemaining -= bytesPerTask;
-        if (f.bytesRemaining <= Constants.ZERO) {
-          // Remove the one that has finished right now
-          rt.flows.remove(f);
-          flowsToRemove.add(f);
-
-          // Remember flows to add, if available
-          for (Flow ff : rt.flows) {
-            if (!ff.consideredAlready) {
-              flowsToAdd.add(ff);
-              break;
-            }
+      for (Job j : jobs){
+        for(Flow f : j.activeFlows){
+          if(f.needReduce(curTime)){
+            f.reduce(curTime, bytesPerFlow[f.randomLink], jobReduceOrder++);
           }
-        }
 
-        rt.shuffleBytesLeft -= bytesPerTask;
-
-        // If no bytes remaining, mark end and mark for removal
-        if ((rt.shuffleBytesLeft <= Constants.ZERO || rt.flows.size() == 0) && !rt.isCompleted()) {
-          rt.cleanupTask(curTime + quantaSize);
-          if (!rt.parentJob.jobActive) {
-            removeDeadJob(rt.parentJob);
+          if(f.bytesRemaining <= Constants.ZERO){
+            j.onFlowFinish(f);
           }
-          decNumActiveTasks();
         }
       }
-      flowsInRacks[i].removeAll(flowsToRemove);
-      addAscending(flowsInRacks[i], flowsToAdd);
+      jobs.manage_buffer(curTime);
     }
   }
 
@@ -188,48 +132,39 @@ public class FlowSimulator extends Simulator {
    *          size of each simulation time step
    */
   private void proceedFlowsInAllRacksInSortedOrder(long curTime, long quantaSize) {
-    boolean[] mapSideBusy = new boolean[NUM_RACKS];
-    Arrays.fill(mapSideBusy, false);
+    HashMap<Flow, Job> flow2Job = new HashMap<Flow,Job>();
+    Vector<Vector<Flow>> allActiveFlow = new Vector<Vector<Flow>>(NUM_OUT_LINK);
+    double[] bytesRemainPerLink = new double[NUM_OUT_LINK];
+    Arrays.fill(bytesRemainPerLink, Constants.RACK_BYTES_PER_SEC / 1024 * quantaSize);
 
-    for (int i = 0; i < NUM_RACKS; i++) {
-      Vector<Flow> flowsToRemove = new Vector<Flow>();
-      for (Flow f : flowsInRacks[i]) {
-        if (!mapSideBusy[f.mapper.taskID]) {
-          mapSideBusy[f.mapper.taskID] = true;
+    for (Job j : jobs){
+      for(Flow f : j.activeFlows){
+        flow2Job.put(f, j);
+        allActiveFlow.elementAt(f.randomLink).add(f);
+      }
+    }
 
-          ReduceTask rt = f.reducer;
+    for(Vector<Flow> ff : allActiveFlow){
+      ff.sort(new Comparator<Flow>() {
+        public int compare(Flow f1, Flow f2){
+          return (int)(f1.bytesRemaining - f2.bytesRemaining);
+        }
+      });
+    }
 
-          double bytesPerTask = Constants.RACK_BYTES_PER_SEC
-              * (1.0 * quantaSize / Constants.SIMULATION_SECOND_MILLIS);
-          bytesPerTask = Math.min(bytesPerTask, f.bytesRemaining);
+    for(Vector<Flow> ff : allActiveFlow){
+      for(Flow f : ff){
+        if(bytesRemainPerLink[f.randomLink] <= 0){
+          continue;
+        }
+        double bytesPerFlow = Math.min(f.bytesRemaining, bytesRemainPerLink[f.randomLink]);
+        f.bytesRemaining -= bytesPerFlow;
+        bytesRemainPerLink[f.randomLink] -= bytesPerFlow;
 
-          f.bytesRemaining -= bytesPerTask;
-          if (f.bytesRemaining <= Constants.ZERO) {
-            rt.flows.remove(f);
-            flowsToRemove.add(f);
-          }
-
-          rt.shuffleBytesLeft -= bytesPerTask;
-
-          rt.parentJob.decreaseShuffleBytesPerRack(rt.taskID, bytesPerTask);
-
-          // If no bytes remaining, mark end and mark for removal
-          if ((rt.shuffleBytesLeft <= Constants.ZERO || rt.flows.size() == 0)
-              && !rt.isCompleted()) {
-
-            rt.cleanupTask(curTime + quantaSize);
-            if (!rt.parentJob.jobActive) {
-              removeDeadJob(rt.parentJob);
-            }
-            decNumActiveTasks();
-          }
-
-          break;
-        } else {
-          System.out.print("");
+        if(f.bytesRemaining <= 0){
+          flow2Job.get(f).onFlowFinish(f);
         }
       }
-      flowsInRacks[i].removeAll(flowsToRemove);
     }
   }
 }
