@@ -137,7 +137,7 @@ public class CoflowGym {
     }
 
     public static void main(String[] args) {
-        String[] args1 = {"FAIR", "C:\\Users\\ilatei\\Desktop\\coflowgym\\scripts\\test.txt"};
+        String[] args1 = {"FAIR", "C:\\Users\\ilatei\\Desktop\\coflowgym\\scripts\\test0.txt"};
         CoflowGym gym = new CoflowGym(args1);
         double initVal = 10485760.0;
         double[] thresholds = new double[9];
@@ -150,7 +150,7 @@ public class CoflowGym {
             gym.reset();
             for (int i = 0;i < 400; ++i) {
                 JSONObject res = gym.toOneStep(thresholds);
-                System.out.println("Step: "+res);
+                // System.out.println("Step: "+res);
                 gym.takeAction(thresholds);
                 if (res.get("done").equals(true)) break;
             }

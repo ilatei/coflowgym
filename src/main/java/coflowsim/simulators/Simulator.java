@@ -195,7 +195,7 @@ public abstract class Simulator {
             }
 
             long curTime = CURRENT_TIME + i;
-            onSchedule(curTime + Constants.SIMULATION_QUANTA);
+            onSchedule(curTime);
 
             // Print progress
             if (curTime % Constants.SIMULATION_SECOND_MILLIS == 0) {

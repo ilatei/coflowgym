@@ -77,7 +77,7 @@ public class BenchmarkTraceProducer extends TraceProducer {
 
           Vector<Double> flowBytes = new Vector<Double>();
           for (int minutes = 0; minutes < simMinutes; minutes++){
-            flowBytes.add(Double.parseDouble(splits[lIndex++]) * 1048576);
+            flowBytes.add(Double.parseDouble(splits[lIndex++]) * 1024);
           }
           
           Vector<Double> delay = new Vector<Double>();

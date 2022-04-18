@@ -149,18 +149,26 @@ public class Flow implements Comparable<Flow> {
     int packets_dropped = 0;
     int packets_deliverd = 0;
     int packets_delay = 0;
-    for(Packets p : packets){
-      packets_dropped += p.numPackets;
-    }
     for(Packets p : reducedPackets){
-      packets_deliverd += p.numPackets;
-      packets_delay += p.numPackets * (p.reducedTime - p.arriveTime);
+      if(p.dropped){
+        packets_dropped += p.numPackets;
+      }
+      else {
+        packets_deliverd += p.numPackets;
+        packets_delay += p.numPackets * (p.reducedTime - p.arriveTime);
+      }
     }
     // packets.clear();
     reducedPackets.clear();
     JSONObject res = new JSONObject();
-    res.put("dropRate", (double)packets_dropped / (packets_dropped + packets_deliverd));
-    res.put("delay", (double)packets_delay / packets_deliverd);
+    if(packets_deliverd == 0){
+      res.put("dropRate",0);
+      res.put("delay", 0);
+    }
+    else{
+      res.put("dropRate", (double)packets_dropped / (packets_dropped + packets_deliverd));
+      res.put("delay", (double)packets_delay / packets_deliverd);
+    }
     res.put("througthput", (double)packets_deliverd * 500 * 8 / 1024 / 1024);
     return res;
   }

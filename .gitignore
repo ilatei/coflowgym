@@ -8,7 +8,7 @@ release.properties
 .settings/
 .DS_Store
 .metadata/
-
+target/*
 log/*
 logs/*
 */log/*

@@ -291,12 +291,16 @@ def run_human(env):
 def config_env():
     # Configure the jpype environment
     jarpath = os.path.join(os.path.abspath("."))
-    startJVM(getDefaultJVMPath(), "-ea", "-Djava.class.path=%s/target/coflowsim-0.2.0-SNAPSHOT.jar"%(jarpath), convertStrings=False)
+    dependency = "D:/repository/com/alibaba/fastjson/1.2.47"
+    startJVM(getDefaultJVMPath(), "-ea", \
+    "-Djava.class.path=%s/target/coflowsim-0.2.0-SNAPSHOT.jar"%(jarpath), \
+    "-Djava.ext.dirs=%s" % dependency, \
+    convertStrings=False) 
 
-    java.lang.System.out.println("Hello World!")
-    testfile = "./scripts/test.txt"
-    benchmark = "./scripts/FB2010-1Hr-150-0.txt"
-    valid_1 = "./scripts/valid_1.txt"
+    # java.lang.System.out.println("Hello World!")
+    # testfile = "./scripts/test.txt"
+    # benchmark = "./scripts/FB2010-1Hr-150-0.txt"
+    # valid_1 = "./scripts/valid_1.txt"
     # args = ["dark", "COFLOW-BENCHMARK", benchmark] # 2.4247392E7
     # args = ["dark", "COFLOW-BENCHMARK", "./scripts/light_tail.txt"] # 
     # args = ["dark", "COFLOW-BENCHMARK", testfile] # 326688.0
@@ -309,8 +313,8 @@ def config_env():
     # args = ["dark", "COFLOW-BENCHMARK", "./scripts/custom.txt"] # 
     # args = ["dark", "COFLOW-BENCHMARK", choice["data"]]
     # args = ["dark", "COFLOW-BENCHMARK", benchmark] # 2.4247392E7
-    args = ["sscf", "COFLOW-BENCHMARK", valid_1]
-    # args = ["dark", "COFLOW-BENCHMARK", choice["data"]]
+    # args = ["sscf", "COFLOW-BENCHMARK", valid_1]
+    args = ["fair", "C:\\Users\\ilatei\\Desktop\\coflowgym\\scripts\\test.txt"]
     CoflowGym = JClass("coflowsim.CoflowGym")
     gym = CoflowGym(args)
     return CoflowSimEnv(gym, False)

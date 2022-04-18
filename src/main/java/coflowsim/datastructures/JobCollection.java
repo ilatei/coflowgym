@@ -133,6 +133,7 @@ public class JobCollection implements Iterable<Job> {
             }
             else if(buffer_per_flow !=0){
               Packets pp = new Packets(p.arriveTime, p.numPackets - buffer_per_flow);
+              pp.dropped = true;
               f.reducedPackets.add(pp);
               p.numPackets = buffer_per_flow;
               buffer_per_flow = 0;

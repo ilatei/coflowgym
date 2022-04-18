@@ -1,4 +1,3 @@
-coflowsim\traceproducers\CustomTraceProducer.class
 coflowsim\datastructures\Job.class
 coflowsim\datastructures\Flow.class
 coflowsim\traceproducers\TraceProducer.class
@@ -12,5 +11,4 @@ coflowsim\datastructures\JobCollection.class
 coflowsim\simulators\FlowSimulator$1.class
 coflowsim\CoflowGym.class
 coflowsim\datastructures\Packets.class
-coflowsim\traceproducers\JobClassDescription.class
 coflowsim\utils\Utils.class

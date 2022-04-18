@@ -73,7 +73,7 @@ public class Constants {
   /**
    * Capacity constraint of a rack in bps.
    */
-  public static final double RACK_BITS_PER_SEC = 1.0 * 1024 * 1048576;
+  public static final double RACK_BITS_PER_SEC = 40.0 * 1024 * 1048576;
 
   /**
    * Capacity constraint of a rack in Bps.

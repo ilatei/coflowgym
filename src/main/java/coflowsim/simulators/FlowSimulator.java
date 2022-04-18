@@ -93,32 +93,32 @@ public class FlowSimulator extends Simulator {
     Arrays.fill(bytesPerFlow, 0);
     for (Job j : jobs){
       for(Flow f : j.activeFlows){
-        if(f.needReduce(curTime)){
-          numLinkFlows[f.randomLink] ++;
-        }
+        numLinkFlows[f.randomLink] ++;
       }
     }
 
     for(int link=0; link < NUM_OUT_LINK; link++){
-      bytesPerFlow[link] = Constants.RACK_BYTES_PER_SEC / 1000 * quantaSize / numLinkFlows[link];
+      bytesPerFlow[link] = Constants.RACK_BYTES_PER_SEC / 1000 / numLinkFlows[link];
     }
 
-    for (int i = 0; i < NUM_OUT_LINK; i++) {
-      // Vector<Flow> flowsToRemove = new Vector<Flow>();
-      // Vector<Flow> flowsToAdd = new Vector<Flow>();
-
-      for (Job j : jobs){
-        for(Flow f : j.activeFlows){
-          if(f.needReduce(curTime)){
-            f.reduce(curTime, bytesPerFlow[f.randomLink], jobReduceOrder++);
-          }
-
-          if(f.bytesRemaining <= Constants.ZERO){
-            j.onFlowFinish(f);
+    for(int time_offset = 1; time_offset <= Constants.SIMULATION_QUANTA; time_offset++){ 
+      for (int i = 0; i < NUM_OUT_LINK; i++) {
+        // Vector<Flow> flowsToRemove = new Vector<Flow>();
+        // Vector<Flow> flowsToAdd = new Vector<Flow>();
+  
+        for (Job j : jobs){
+          for(Flow f : j.activeFlows){
+            if(f.needReduce(curTime + time_offset)){
+              f.reduce(curTime + time_offset, bytesPerFlow[f.randomLink], jobReduceOrder++);
+            }
+  
+            if(f.bytesRemaining <= Constants.ZERO){
+              j.onFlowFinish(f);
+            }
           }
         }
+        jobs.manage_buffer(curTime + time_offset);
       }
-      jobs.manage_buffer(curTime);
     }
   }
 
