@@ -1,8 +1,10 @@
 package coflowsim.simulators;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.Comparator;
-import java.util.HashMap;
+// import java.util.Comparator;
+// import java.util.HashMap;
 import java.util.Random;
 import java.util.Vector;
 
@@ -29,9 +31,8 @@ public class FlowSimulator extends Simulator {
       double deadlineMultRandomFactor) {
 
     super(sharingAlgo, traceProducer, offline, considerDeadline, deadlineMultRandomFactor);
-    assert (sharingAlgo == SHARING_ALGO.FAIR || sharingAlgo == SHARING_ALGO.PFP);
 
-    if(sharingAlgo == SHARING_ALGO.FAIR || sharingAlgo == SHARING_ALGO.PFP){
+    if(sharingAlgo == SHARING_ALGO.FAIR || sharingAlgo == SHARING_ALGO.PJF){
       Random random = new Random();
       for (Job j : jobs){
         for(Flow f : j.waitingFlows){
@@ -66,6 +67,10 @@ public class FlowSimulator extends Simulator {
     if (sharingAlgo == SHARING_ALGO.FAIR) {
       fairShare(curTime, Constants.SIMULATION_QUANTA);
     } else {
+      if(sharingAlgo == SHARING_ALGO.FIFO || sharingAlgo == SHARING_ALGO.PJF || 
+      sharingAlgo == SHARING_ALGO.SCF || sharingAlgo == SHARING_ALGO.DARK){
+        order_sort();
+      }
       proceedFlowsInAllRacksInSortedOrder(curTime, Constants.SIMULATION_QUANTA);
     }
   }
@@ -86,7 +91,6 @@ public class FlowSimulator extends Simulator {
    */
   private void fairShare(long curTime, long quantaSize) {
     // Calculate the number of outgoing flows
-    jobReduceOrder = 1;
     int[] numLinkFlows = new int[NUM_OUT_LINK];
     double[] bytesPerFlow = new double[NUM_OUT_LINK];
     Arrays.fill(numLinkFlows, 0);
@@ -103,8 +107,7 @@ public class FlowSimulator extends Simulator {
 
     for(int time_offset = 1; time_offset <= Constants.SIMULATION_QUANTA; time_offset++){ 
       for (int i = 0; i < NUM_OUT_LINK; i++) {
-        // Vector<Flow> flowsToRemove = new Vector<Flow>();
-        // Vector<Flow> flowsToAdd = new Vector<Flow>();
+        jobReduceOrder = 1;
   
         for (Job j : jobs){
           for(Flow f : j.activeFlows){
@@ -122,6 +125,32 @@ public class FlowSimulator extends Simulator {
     }
   }
 
+
+  private void order_sort(){
+    flowsInRacks.clear();
+    for(Job j:jobs){
+      for(Flow f:j.activeFlows){
+        flowsInRacks.add(f);
+      }
+    }
+    if(sharingAlgo == SHARING_ALGO.FIFO){
+      Collections.shuffle(flowsInRacks);
+    }
+    else if(sharingAlgo == SHARING_ALGO.PJF){
+      Collections.sort(flowsInRacks, PJFComparator);
+    }
+    else if(sharingAlgo == SHARING_ALGO.SCF){
+      Collections.sort(flowsInRacks, SJFComparator);
+    }
+    else if(sharingAlgo == SHARING_ALGO.DARK){
+      Collections.shuffle(flowsInRacks);
+      Collections.sort(flowsInRacks, DARKComparator);
+    }
+    // for(Flow f : flowsInRacks){
+    //   System.out.println(f.learned_pri + " " + f.pri);
+    // }
+  }
+
   /**
    * Proceed flows in each rack in the already-determined order; e.g., shortest-first of PFP or
    * earliest-deadline-first in the deadline-sensitive scenario.
@@ -132,39 +161,69 @@ public class FlowSimulator extends Simulator {
    *          size of each simulation time step
    */
   private void proceedFlowsInAllRacksInSortedOrder(long curTime, long quantaSize) {
-    HashMap<Flow, Job> flow2Job = new HashMap<Flow,Job>();
-    Vector<Vector<Flow>> allActiveFlow = new Vector<Vector<Flow>>(NUM_OUT_LINK);
-    double[] bytesRemainPerLink = new double[NUM_OUT_LINK];
-    Arrays.fill(bytesRemainPerLink, Constants.RACK_BYTES_PER_SEC / 1024 * quantaSize);
-
-    for (Job j : jobs){
-      for(Flow f : j.activeFlows){
-        flow2Job.put(f, j);
-        allActiveFlow.elementAt(f.randomLink).add(f);
+    double bytesPerFlow = Constants.RACK_BYTES_PER_SEC / 1000;
+    double bytesReduced = 0;
+    for(int time_offset = 1; time_offset <= Constants.SIMULATION_QUANTA; time_offset++){
+      jobReduceOrder = 0;
+      double bytesRemain = bytesPerFlow; 
+      Vector<Flow> reduceVec = new Vector<Flow>();
+      Vector<Flow> reduceVec1 = new Vector<Flow>();
+      double reducePri = 0;
+      int flow_index = 0;
+      while(flow_index < flowsInRacks.size()){
+        Flow f = flowsInRacks.elementAt(flow_index);
+        while(f.learned_pri <= reducePri){
+          reduceVec.add(f);
+          flow_index ++;
+          if(flow_index >= flowsInRacks.size()){
+            break;
+          }
+          f = flowsInRacks.elementAt(flow_index);
+        }
+        reducePri = f.learned_pri;
+        if(!reduceVec.isEmpty()){
+          while(!reduceVec.isEmpty() && (bytesRemain >= 500)){
+            for(Flow ff : reduceVec){
+              if(ff.needReduce(curTime + time_offset)){
+                bytesReduced = ff.reduce(curTime + time_offset, Math.min(bytesRemain, ff.quantums), jobReduceOrder);
+                bytesRemain -= bytesReduced;
+                jobReduceOrder += bytesReduced / 500;
+              }
+              if(!ff.needReduce(curTime + time_offset)){
+                reduceVec1.add(ff);
+              }
+            }
+            for(Flow ff : reduceVec1){
+              reduceVec.remove(ff);
+            }
+            reduceVec1.clear();
+          }
+        }
       }
-    }
-
-    for(Vector<Flow> ff : allActiveFlow){
-      ff.sort(new Comparator<Flow>() {
-        public int compare(Flow f1, Flow f2){
-          return (int)(f1.bytesRemaining - f2.bytesRemaining);
-        }
-      });
-    }
-
-    for(Vector<Flow> ff : allActiveFlow){
-      for(Flow f : ff){
-        if(bytesRemainPerLink[f.randomLink] <= 0){
-          continue;
-        }
-        double bytesPerFlow = Math.min(f.bytesRemaining, bytesRemainPerLink[f.randomLink]);
-        f.bytesRemaining -= bytesPerFlow;
-        bytesRemainPerLink[f.randomLink] -= bytesPerFlow;
-
-        if(f.bytesRemaining <= 0){
-          flow2Job.get(f).onFlowFinish(f);
-        }
-      }
+      
+      jobs.manage_buffer(curTime + time_offset);
     }
   }
+
+  private static Comparator<Flow> PJFComparator = new Comparator<Flow>() {
+    public int compare(Flow o1, Flow o2) {
+      if (o1.pri == o2.pri) return 0;
+      return o1.pri < o2.pri? -1 : 1;
+    }
+  };
+
+  private static Comparator<Flow> SJFComparator = new Comparator<Flow>() {
+    public int compare(Flow o1, Flow o2) {
+      if (o1.packets.firstElement().arriveTime < o2.packets.firstElement().arriveTime){ return -1;}
+      else if(o1.packets.firstElement().arriveTime > o2.packets.firstElement().arriveTime) { return 1;}
+      return o1.packets.firstElement().numPackets < o2.packets.firstElement().numPackets? -1 : 1;
+    }
+  };
+
+  private static Comparator<Flow> DARKComparator = new Comparator<Flow>() {
+    public int compare(Flow o1, Flow o2) {
+      if (o1.learned_pri == o2.learned_pri) return 0;
+      return o1.learned_pri < o2.learned_pri? -1 : 1;
+    }
+  };
 }

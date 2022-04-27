@@ -23,7 +23,7 @@ public abstract class Simulator {
 
   public static int NUM_OUT_LINK = 3;
 
-  protected JobCollection jobs;
+  public JobCollection jobs;
 
   protected Vector<Flow> flowsInRacks;
   protected HashMap<String, Job> activeJobs;
@@ -235,19 +235,17 @@ public abstract class Simulator {
      *   sent bytes: unit is B(byte)
      *   duration time: unit is milli second, a second = 1024 milli second
      */
-    public String getObservation(int STEP_IN_MILLIS) {
-        String obs = "";
+    public JSONObject getObservation(int STEP_IN_MILLIS) {
+        JSONObject obs = new JSONObject();
         Utils.log("Observation:");
-        obs += "Observation: [";
         for (Job j : activeJobs.values()) {
             // Utils.log(j.toString());
             for(Flow f : j.activeFlows){
-              JSONObject result = f.calResult();
-              obs += "(" + f + ", "+ result + ")"; 
+              JSONObject result = f.cal_result();
+              result.put("priority",f.pri);
+              obs.put(f.toString(), result); 
             }
         }
-        obs += "]";
-
         return obs;
     }
 
@@ -353,5 +351,15 @@ public abstract class Simulator {
 
   public String getMLFQInfo() {
       return "";
+  }
+
+  public void setPri(double[] thresholds) {
+    int index = 0;
+    for(Job j : activeJobs.values()){
+        for(Flow f: j.activeFlows){
+            f.learned_pri = thresholds[index++];
+            // System.out.println(f.toString() + " " + thresholds[index - 1]);
+        }
+    }
   }
 }

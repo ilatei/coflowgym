@@ -7,6 +7,7 @@ public class Packets implements Comparable<Packets>{
     public long reducedTime;
     public int reducedOrder;
     public boolean dropped = false;
+    public int flowId;
 
     public Packets(long arriveTime, int numPackets){
         this.arriveTime = arriveTime;

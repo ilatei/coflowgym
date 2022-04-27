@@ -1,3 +1,4 @@
+from re import A
 import sys, time, os, math
 from jpype import *
 import numpy as np
@@ -7,6 +8,8 @@ rootPath = os.path.split(curPath)[0]
 sys.path.append(rootPath)
 print(sys.path)
 
+
+from coflowgym.algo.a2c import A2C
 from coflowgym.algo.ddpg import DDPG, OUNoise
 from coflowgym.algo.ddpg_lstm import DDPG_LSTM
 from coflowgym.algo.ddpg_prob import DDPGProb
@@ -226,6 +229,208 @@ def loop(env):
     print("Game is over!")
 
 
+def loop_ddpg(env):
+    """Coflow Environment
+    """
+    # thresholds = [1.0485760E7*(10**i) for i in range(9)]
+    # thresholds = np.array([10]*9)
+    a_dim = env.action_space.shape[0]
+    s_dim = env.observation_space.shape[0]
+    a_bound = env.action_space.high
+
+    print("a_dim:", a_dim, "s_dim:", s_dim, "a_bound:", a_bound)
+    agent = DDPG(a_dim, s_dim, a_bound)
+    oun = OUNoise(a_dim, mu=0)
+
+    ################ hyper parameter ##############
+    agent.LR_A = 1e-4
+    agent.LR_C = 1e-3
+    agent.GAMMA = 0.99
+    agent.TAU = 0.001
+
+    epsilon = 1
+    EXPLORE = 70 # ep 320 (threshold is 0.01), 480(0.001)
+    TH = 20 # threshold MULT default is 10
+    PERIOD_SAVE_MODEL = True
+    IS_OU = True
+    var = 3
+    ###############################################
+
+    print("In loop!")
+    print("log file:", LOG_FILE)
+    print("agent:", agent)
+    print("EXPLORE:", EXPLORE)
+    print("IS_OU:", IS_OU)
+    print("directory of model: ", MODEL_DIR)
+
+
+    begin_time = time.time()
+
+    for episode in range(1, 1000):
+        obs = env.reset()
+        oun.reset()
+        epsilon -= (epsilon/EXPLORE)
+
+        ep_reward = 0
+
+        ep_time = time.time()
+        for i in range(int(1e10)):
+            ## Add exploration noise
+            action_original = agent.choose_action(obs)
+            action = action_original
+            # action_original = np.array(thresholds)
+            # action_original = (np.random.rand(a_dim))*2-1
+            # if IS_OU:
+            #     # action = action_original + max(0.01, epsilon)*oun.noise()
+            #     action = action_original + epsilon*oun.noise()
+            # else:
+            #     action = np.clip(np.random.normal(action_original, var), -1, 1)
+
+            ## because of `tanh` activation which valued in [-1, 1], we need to scale
+            step_action = action
+            # obs_n, reward, done, info = env.step( makeMLFQVal(env, action) )
+            obs_n, reward, done = env.step(step_action)
+            print("episode %s step %s"%(episode, i))
+            print("obs_next:", obs_n.reshape(-1, env.UNIT_DIM), "reward:", reward, "done:", done)
+            print("action:", action.tolist(), "step action:", step_action, "original:", action_original.tolist())
+            # mlfqs.append(info["mlfq"])
+ 
+            if not done:
+                agent.store_transition(obs, action, reward, obs_n)
+
+            start_learning = agent.pointer > agent.BATCH_SIZE
+            if start_learning:
+                agent.learn()
+                var *= 0.9995
+            
+            obs = obs_n
+            ep_reward += reward
+            if done:
+                ## print stats
+                result, cf_info = env.getResult()
+                print("cf_info:", cf_info)
+                print("\nepisode %s: step %s, ep_reward %s"%(episode, i, ep_reward))
+                print("result: ", result)
+                if IS_OU:
+                    print("epsilon:", epsilon)
+                else:
+                    print("var:", var)
+                print("time: total-%s, episode-%s"%(get_h_m_s(time.time()-begin_time), get_h_m_s(time.time()-ep_time)))
+                sys.stdout.flush()
+                break
+        if PERIOD_SAVE_MODEL and episode%10 == 0:
+            model_name = "%s/model_%s.ckpt"%(MODEL_DIR, episode)
+            agent.save(model_name)
+
+    env.close()
+    print("Game is over!")
+
+
+def loop_a2c(env):
+    """Coflow Environment
+    """
+    # thresholds = [1.0485760E7*(10**i) for i in range(9)]
+    # thresholds = np.array([10]*9)
+    a_dim = env.action_space.shape[0]
+    a_dim = 6
+    s_dim = env.observation_space.shape[0]
+
+    print("a_dim:", a_dim, "s_dim:", s_dim)
+    agent = A2C(a_dim, s_dim)
+
+    epsilon = 1
+    EXPLORE = 70 # ep 320 (threshold is 0.01), 480(0.001)
+    TH = 20 # threshold MULT default is 10
+    PERIOD_SAVE_MODEL = True
+    IS_OU = True
+    var = 3
+    ###############################################
+
+    print("In loop!")
+    print("log file:", LOG_FILE)
+    print("agent:", agent)
+    print("EXPLORE:", EXPLORE)
+    print("IS_OU:", IS_OU)
+    print("directory of model: ", MODEL_DIR)
+
+
+    begin_time = time.time()
+
+    for episode in range(1, 1000):
+        obs = env.reset()
+
+        epsilon -= (epsilon/EXPLORE)
+
+        ep_reward = 0
+
+        ep_time = time.time()
+        for i in range(int(1e10)):
+            ## Add exploration noise
+            action = agent.choose_action(obs)
+            actions = []
+            if action == 0:
+                actions = [0,1,2]
+            elif action == 1:
+                actions = [0,2,1]
+            elif action == 2:
+                actions = [1,0,2]
+            elif action == 3:
+                actions = [1,2,0]
+            elif action == 4:
+                actions = [2,0,1]
+            elif action == 5:
+                actions = [2,1,0]
+            else:
+                exit(-1)
+            
+
+            # action_original = np.array(thresholds)
+            # action_original = (np.random.rand(a_dim))*2-1
+            # if IS_OU:
+            #     # action = action_original + max(0.01, epsilon)*oun.noise()
+            #     action = action_original + epsilon*oun.noise()
+            # else:
+            #     action = np.clip(np.random.normal(action_original, var), -1, 1)
+
+            ## because of `tanh` activation which valued in [-1, 1], we need to scale
+            # step_action = action
+            # obs_n, reward, done, info = env.step( makeMLFQVal(env, action) )
+            obs_n, reward, done = env.step(actions)
+            print("episode %s step %s"%(episode, i))
+            print("obs_next:", obs_n.reshape(-1, env.UNIT_DIM), "reward:", reward, "done:", done)
+            print("actions:", actions)
+            # mlfqs.append(info["mlfq"])
+ 
+            if not done:
+                td_err = agent.critic_learn(obs, reward, obs_n)
+                agent.actor_learn(obs, action, td_err)
+                var *= 0.9995
+            
+            obs = obs_n
+            ep_reward += reward
+            if done:
+                ## print stats
+                # result, cf_info = env.getResult()
+                # print("cf_info:", cf_info)
+                print("\nepisode %s: step %s, ep_reward %s"%(episode, i, ep_reward))
+                # print("result: ", result)
+                if IS_OU:
+                    print("epsilon:", epsilon)
+                else:
+                    print("var:", var)
+                print("time: total-%s, episode-%s"%(get_h_m_s(time.time()-begin_time), get_h_m_s(time.time()-ep_time)))
+                sys.stdout.flush()
+                break
+        if PERIOD_SAVE_MODEL and episode%10 == 0:
+            model_name = "%s/model_%s.ckpt"%(MODEL_DIR, episode)
+            agent.save(model_name)
+
+    env.close()
+    print("Game is over!")
+
+
+
+
 def train_action_prob(env):
     """Coflow Environment
     """
@@ -409,14 +614,17 @@ def train_lstm(env):
 def config_env():
     # Configure the jpype environment
     jarpath = os.path.join(os.path.abspath("."))
-    startJVM(getDefaultJVMPath(), "-ea", "-Djava.class.path=%s/target/coflowsim-0.2.0-SNAPSHOT.jar"%(jarpath), convertStrings=False)
+    dependency = "D:/repository/com/alibaba/fastjson/1.2.47"
+    startJVM(getDefaultJVMPath(), "-ea", \
+    "-Djava.class.path=%s/target/coflowsim-0.2.0-SNAPSHOT.jar"%(jarpath), \
+    "-Djava.ext.dirs=%s" % dependency, \
+    convertStrings=False) 
 
-    java.lang.System.out.println("Hello World!")
     testfile = "./scripts/100coflows.txt"
     benchmark = "./scripts/FB2010-1Hr-150-0.txt"
     valid_1 = "./scripts/valid_1.txt"
     # args = ["dark", "COFLOW-BENCHMARK", benchmark] # 2.4247392E7
-    args = ["dark", "COFLOW-BENCHMARK", valid_1]
+    # args = ["dark", "COFLOW-BENCHMARK", valid_1]
     # args = ["dark", "COFLOW-BENCHMARK", "./scripts/light_tail.txt"] # 3.73975776E8
     # args = ["dark", "COFLOW-BENCHMARK", testfile] # 326688.0
     # args = ["dark", "COFLOW-BENCHMARK", "./scripts/test_150_250.txt"] # 1.5923608E7
@@ -424,6 +632,7 @@ def config_env():
     # args = ["dark", "COFLOW-BENCHMARK", "./scripts/test_200_250.txt"] # 6915640.0
     # args = ["dark", "COFLOW-BENCHMARK", "./scripts/test_200_225.txt"] # 3615440.0    
     # args = ["dark", "COFLOW-BENCHMARK", "./scripts/custom.txt"] # 
+    args = ["DARK", "C:\\Users\\ilatei\\Desktop\\coflowgym\\scripts\\test0.txt"]
     print("arguments:", args)
     CoflowGym = JClass("coflowsim.CoflowGym")
     gym = CoflowGym(args)
@@ -445,7 +654,8 @@ if __name__ == "__main__":
     sys.stdout.flush()
 
     # main loop
-    loop(env)
+    # loop_a2c(env)
+    loop_ddpg(env)
     # train_action_prob(env)
     # train_lstm(env)
 

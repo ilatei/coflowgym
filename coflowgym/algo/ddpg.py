@@ -16,7 +16,7 @@ class DDPG(object):
     LR_A = 0.001    # learning rate for actor， default is 0.001
     LR_C = 0.002    # learning rate for critic, default is 0.002
     GAMMA = 0.9     # reward discount, default to 0.9
-    TAU = 0.01      # soft replacement, default to 0.01
+    TAU = 0.001      # soft replacement, default to 0.01
     MEMORY_CAPACITY = 10000 # default to 10000
     BATCH_SIZE = 32
 
@@ -109,15 +109,15 @@ class DDPG(object):
             # net1 = tf.layers.dense(s, n_l1, activation=tf.nn.relu, name='l1', trainable=trainable)
             w1 = tf.get_variable("w1", [self.s_dim, n_l1], trainable=trainable)
             b1 = tf.get_variable("b1", [1, n_l1], trainable=trainable)
-            net1 = tf.nn.relu(tf.matmul(s, w1) + b1)
+            net1 = tf.nn.leaky_relu(tf.matmul(s, w1) + b1)
             ## BN
             # net1 = tf.nn.relu(tf.layers.batch_normalization(tf.matmul(s, w1) + b1, training=True, name="BN_1"))
             w2 = tf.get_variable('w2', [n_l1, n_l2], trainable=trainable)
             b2 = tf.get_variable('b2', [1, n_l2], trainable=trainable)
-            net = tf.nn.relu(tf.matmul(net1, w2) + b2)
+            net = tf.nn.leaky_relu(tf.matmul(net1, w2) + b2)
             ## BN
             # net = tf.nn.relu(tf.layers.batch_normalization(tf.matmul(net1, w2) + b2, training=True, name="BN_2"))
-            a = tf.layers.dense(net, self.a_dim, activation=tf.nn.tanh, name='a', trainable=trainable)
+            a = tf.layers.dense(net, self.a_dim, activation=tf.nn.sigmoid, name='a', trainable=trainable)
 
             tf.summary.histogram(scope+"/w1", w1)
             tf.summary.histogram(scope+"/b1", b1)
@@ -135,10 +135,10 @@ class DDPG(object):
             data = tf.matmul(s, w1_s) + tf.matmul(a, w1_a) + b1
             ## BN
             # data = tf.layers.batch_normalization(tf.matmul(s, w1_s) + tf.matmul(a, w1_a) + b1, training=True, name="BN_1")
-            net1 = tf.nn.relu(data)
+            net1 = tf.nn.leaky_relu(data)
             w2 = tf.get_variable('w2', [n_l1, n_l2], trainable=trainable)
             b2 = tf.get_variable('b2', [1, n_l2], trainable=trainable)
-            net = tf.nn.relu(tf.matmul(net1, w2) + b2)
+            net = tf.nn.leaky_relu(tf.matmul(net1, w2) + b2)
             ## BN
             # net = tf.nn.relu(tf.layers.batch_normalization(tf.matmul(net1, w2) + b2, training=True, name="BN_2"))
 

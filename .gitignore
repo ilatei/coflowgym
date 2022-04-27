@@ -18,3 +18,4 @@ models/*
 tf_log/*
 *.log
 .vscode
+data/*

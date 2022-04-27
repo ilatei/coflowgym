@@ -15,6 +15,7 @@ public class Constants {
      * Flow-level fair sharing.
      */
     FAIR,
+    PJF,
     /**
      * Per-flow SRTF priority and EDF for deadline-sensitive flows.
      */
@@ -73,7 +74,7 @@ public class Constants {
   /**
    * Capacity constraint of a rack in bps.
    */
-  public static final double RACK_BITS_PER_SEC = 40.0 * 1024 * 1048576;
+  public static final double RACK_BITS_PER_SEC = 15.0 * 1024 * 1048576;
 
   /**
    * Capacity constraint of a rack in Bps.
@@ -94,7 +95,7 @@ public class Constants {
   /**
    * {@link Simulator#simulate(int)} completes after this time.
    */
-  public static final int SIMULATION_ENDTIME_MILLIS = 86400 * SIMULATION_SECOND_MILLIS;
+  public static final int SIMULATION_ENDTIME_MILLIS = 24 * 3600 * SIMULATION_SECOND_MILLIS;
 
-  public static final int BUFFER_PER_FLOW = 100; //100 packets
+  public static final int BUFFER_PER_FLOW = 100; //packets
 }

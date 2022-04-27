@@ -314,7 +314,7 @@ def config_env():
     # args = ["dark", "COFLOW-BENCHMARK", choice["data"]]
     # args = ["dark", "COFLOW-BENCHMARK", benchmark] # 2.4247392E7
     # args = ["sscf", "COFLOW-BENCHMARK", valid_1]
-    args = ["fair", "C:\\Users\\ilatei\\Desktop\\coflowgym\\scripts\\test.txt"]
+    args = ["fair", "C:\\Users\\ilatei\\Desktop\\coflowgym\\scripts\\test0.txt"]
     CoflowGym = JClass("coflowsim.CoflowGym")
     gym = CoflowGym(args)
     return CoflowSimEnv(gym, False)
@@ -331,9 +331,9 @@ if __name__ == "__main__":
 
     # main loop
     begin = time.time()
-    # run(env, choice)
+    run(env, choice)
     # run_coflowsim(env)
-    run_human(env)
+    # run_human(env)
     # sample(6)
     print("Consume Time:", get_h_m_s(time.time()-begin))
 

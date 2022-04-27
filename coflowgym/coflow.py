@@ -1,6 +1,7 @@
 from jpype import *
 import os
 from gym import Env, spaces
+from torch import int32
 from coflowgym.algo.ddpg import DDPG
 from coflowgym.algo.ddpg import OUNoise
 import numpy as np
@@ -15,14 +16,15 @@ from coflowgym.util import Logger, KDE
 class CoflowSimEnv(Env):
     def __init__(self, gym, debug=True):
         self.coflowsim = gym
-        self.NUM_COFLOW = self.coflowsim.MAX_COFLOW # 10
-        self.UNIT_DIM = 4 # id, width/1000, sent_bytes, duration_time/1000
+        # self.NUM_COFLOW = self.coflowsim.MAX_COFLOW # 10
+        self.NUM_COFLOW = 3
+        self.UNIT_DIM = 4 # pri, delay, drop, throughtput
         self.STATE_DIM = self.NUM_COFLOW*self.UNIT_DIM
-        self.ACTION_DIM = 9
+        self.ACTION_DIM = 3
 
         self.low_property = np.zeros((self.UNIT_DIM,))
         assert self.UNIT_DIM == 4, "UNIT_DIM != 4"
-        self.high_property = np.array([526, 21170, 8501205*1048576, 0]) # B, ms
+        self.high_property = np.array([3, 10, 1, 40000])
         
         self.observation_space = spaces.Box(0, 1, (self.STATE_DIM,))
         self.action_space = spaces.Box(0, 1, (self.ACTION_DIM,))
@@ -44,33 +46,57 @@ class CoflowSimEnv(Env):
         res = self.coflowsim.toOneStep(action)
         # print("res", res)
         result = json.loads(str(res))
-        obs = result["observation"]
-        obs = self.__parseObservation(obs)
+        obs = res["observation"]
+        obs = self.__parseObservation(str(obs))
         done = result["done"]
-        try:
-            mlfq = eval(result["MLFQ"])
-        except SyntaxError:
-            mlfq = None
+        # try:
+        #     mlfq = eval(result["MLFQ"])
+        # except SyntaxError:
+        #     mlfq = None
         # if self.debug:
         #     logger.print("MLFQ: "+str(mlfq))
         # obs = self.coflowsim.printStats()
         # obs = np.zeros(self.observation_space.shape)
 
+
+        reward = self.__cal_reward_1(res["observation"])
         ### calculate the reward
         # print("result: ", result)
-        completed = result["completed"]
-        a_coflows = eval(result["observation"].split(":")[-1])
-        c_coflows = eval(completed.split(":")[-1])
+        # completed = result["completed"]
+        # a_coflows = eval(result["observation"].split(":")[-1])
+        # c_coflows = eval(completed.split(":")[-1])
         # reward = self.__calculate_reward(a_coflows, c_coflows)
         # reward = self.__cal_reward_2(a_coflows, c_coflows)
         # reward = self.__cal_reward_3(a_coflows, c_coflows)
-        reward = self.__cal_reward_4(a_coflows, c_coflows) ## best
+        # reward = self.__cal_reward_4(a_coflows, c_coflows) ## best
         # reward = self.__cal_reward_5(a_coflows, c_coflows, mlfq)
 
         # print("completed: ", [coflow[0] for coflow in c_coflows])
         
-        return obs, reward, done, {"mlfq":mlfq, "obs":result["observation"], "completed": result["completed"]}
+        return obs, reward, done
     
+    def __cal_reward_1(self, obs):
+        reward_delay = 0.0
+        reward_drop = 0.0
+        reward_throughput = 0.0
+        obs = json.loads(str(obs))
+        for name in obs.keys():
+            info = obs.get(name)
+            weight = []
+            if name == "FLOW-1":
+                weight = [0, 0, 0.33]
+            elif name == "FLOW-2":
+                weight = [0.3, 0.7, 0]
+            elif name == "FLOW-3":
+                weight = [0.6, 0.3, 0.1]
+            # weight = (3 - info.get("priority")) / 3
+            reward_delay += max(1 - info.get("delay"), 0) * weight[0]
+            reward_drop += max(0, 1 - info.get("dropRate") * 10) *weight[1]
+            reward_throughput += info.get("throughput")/ 10000 * weight[2]
+            print(name + " " + str(weight) + " " + str(reward_delay) + " " + str(reward_drop) + " " + str(reward_throughput))
+        return 0.5 * reward_delay + 0.3 * reward_drop + 0.2 * reward_throughput
+
+
     def __cal_reward_5(self, a_coflows, c_coflows, mlfq):
         r1 = self.__cal_reward_4(a_coflows, c_coflows)
         r2 = -np.std(mlfq)
@@ -183,22 +209,26 @@ class CoflowSimEnv(Env):
         return reward
 
     def __parseObservation(self, obs):
-        arr = obs.split(":")[-1]
-        arrs = sorted(eval(arr), key=lambda x: x[2], reverse=True) # sort according to sent bytes
-        arrs = arrs[:self.NUM_COFLOW]
+        arr = json.loads(obs)
         state = []
-        for a in arrs:
+        for a in arr.keys():
+            info = arr.get(a)
+            state.append(info["priority"] / self.high_property[0])
+            state.append(info["delay"] / self.high_property[1])
+            state.append(info["dropRate"] / self.high_property[2])
+            state.append(info["throughput"] / self.high_property[3])
+            
             ## id, width, already bytes(B), duration time(ms)
             # power = int(math.log(a[2], 10)) if a[2] != 0 else 0
             # b = (a[0], a[1]/1000, a[2]/(10**power), power, a[3]/1000)
-            if a[3] > self.high_property[3]:
-                self.high_property[3] = a[3]
+            # if a[3] > self.high_property[3]:
+            #     self.high_property[3] = a[3]
             # print("parse: ", a, self.low_property, self.high_property)
-            b = [(a[i]-self.low_property[i])/(self.high_property[i]-self.low_property[i]) for i in range(self.UNIT_DIM)]
-            # print(b)
-            state.extend(b)
-        if len(arrs) < self.NUM_COFLOW:
-            state.extend([0]*(self.NUM_COFLOW-len(arrs))*self.UNIT_DIM)
+            # b = [(a[i]-self.low_property[i])/(self.high_property[i]-self.low_property[i]) for i in range(self.UNIT_DIM)]
+            # # print(b)
+            # state.extend(b)
+        # if len(arrs) < self.NUM_COFLOW:
+        #     state.extend([0]*(self.NUM_COFLOW-len(arrs))*self.UNIT_DIM)
         return np.array(state)
 
     def getResult(self):
